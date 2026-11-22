@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Corticodermato</title>
+  <meta name="description" content="Aide à la prescription des corticoïdes systémiques : équivalences et schémas de décroissance.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="entete">
+    <h1>Corticodermato</h1>
+    <p class="sous-titre">Corticoïdes systémiques : équivalences et schémas de décroissance</p>
+  </header>
+
+  <nav class="onglets" role="tablist">
+    <button role="tab" aria-selected="true" aria-controls="p-classes" id="t-classes">Classes et équivalences</button>
+    <button role="tab" aria-selected="false" aria-controls="p-schema" id="t-schema">Schéma de décroissance</button>
+  </nav>
+
+  <main>
+    <!-- Onglet 1 : classes et équivalences -->
+    <section id="p-classes" role="tabpanel" aria-labelledby="t-classes">
+      <div class="carte">
+        <h2>Convertisseur</h2>
+        <div class="ligne-form">
+          <label>Dose
+            <input type="number" id="conv-dose" value="20" min="0" step="any" inputmode="decimal">
+          </label>
+          <label>mg de
+            <select id="conv-mol"></select>
+          </label>
+        </div>
+        <div id="conv-resultat" class="grille-equiv"></div>
+      </div>
+
+      <div class="carte">
+        <h2>Classes</h2>
+        <div class="table-defile">
+          <table id="table-classes">
+            <thead>
+              <tr>
+                <th>Molécule</th>
+                <th>Dose équivalente</th>
+                <th>Activité anti-inflammatoire</th>
+                <th>Activité minéralocorticoïde</th>
+                <th>Spécialités (France)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="note">Doses équivalentes en activité anti-inflammatoire (5 mg de prednisone). Activités relatives à l'hydrocortisone (= 1).</p>
+      </div>
+    </section>
+
+    <!-- Onglet 2 : schéma de décroissance -->
+    <section id="p-schema" role="tabpanel" aria-labelledby="t-schema" hidden>
+      <form class="carte" id="form-schema" autocomplete="off">
+        <h2>Paramètres</h2>
+        <div class="ligne-form">
+          <label>Molécule
+            <select id="s-mol"></select>
+          </label>
+          <label>Date de début
+            <input type="date" id="s-debut">
+          </label>
+        </div>
+        <fieldset>
+          <legend>Dosages disponibles</legend>
+          <div id="s-dosages" class="cases"></div>
+          <label class="case"><input type="checkbox" id="s-demi"> Autoriser les demi-comprimés</label>
+        </fieldset>
+
+        <div class="ligne-form">
+          <label>Dose initiale (mg/j)
+            <input type="number" id="s-dose" value="40" min="0" step="any" inputmode="decimal">
+          </label>
+          <label>Durée (jours)
+            <input type="number" id="s-jours" value="7" min="1" step="1" inputmode="numeric">
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Au-dessus du seuil</legend>
+          <div class="ligne-form">
+            <label>Seuil (mg/j)
+              <input type="number" id="s-seuil" value="10" min="0" step="any" inputmode="decimal">
+            </label>
+            <label>Diminuer de
+              <span class="avec-unite">
+                <input type="number" id="s-pas-haut" value="5" min="0" step="any" inputmode="decimal">
+                <select id="s-mode" aria-label="Unité de décroissance">
+                  <option value="mg">mg</option>
+                  <option value="pct">%</option>
+                </select>
+              </span>
+            </label>
+            <label>Tous les (jours)
+              <input type="number" id="s-jours-haut" value="7" min="1" step="1" inputmode="numeric">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Sous le seuil</legend>
+          <div class="ligne-form">
+            <label>Diminuer de (mg)
+              <input type="number" id="s-pas-bas" value="1" min="0" step="any" inputmode="decimal">
+            </label>
+            <label>Tous les (jours)
+              <input type="number" id="s-jours-bas" value="7" min="1" step="1" inputmode="numeric">
+            </label>
+            <label>Dose finale (mg/j)
+              <input type="number" id="s-finale" value="0" min="0" step="any" inputmode="decimal">
+            </label>
+          </div>
+        </fieldset>
+        <p class="note" id="s-aide-seuil"></p>
+      </form>
+
+      <div class="carte" id="schema-sortie">
+        <div class="titre-actions">
+          <h2>Schéma</h2>
+          <div class="actions">
+            <button type="button" id="b-copier">Copier le texte</button>
+            <button type="button" id="b-imprimer">Imprimer</button>
+          </div>
+        </div>
+        <p class="impression-seule" id="impr-titre"></p>
+        <div id="s-erreurs" class="alerte" hidden></div>
+        <div id="s-resume" class="resume"></div>
+        <div class="table-defile">
+          <table id="table-schema">
+            <thead>
+              <tr>
+                <th>Du</th>
+                <th>Au</th>
+                <th>Jours</th>
+                <th>Dose (mg/j)</th>
+                <th>Comprimés par jour</th>
+                <th>Éq. prednisone</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="s-alertes"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pied">
+    <p>Outil d'aide à la prescription. Ne remplace pas le jugement clinique ni le RCP des spécialités. Aucune donnée saisie n'est enregistrée.</p>
+    <p id="version"></p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
