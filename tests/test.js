@@ -1,56 +1,68 @@
 // Tests de la logique de calcul : node tests/test.js
 const assert = require("assert");
 const path = require("path");
-const { MOLECULES } = require(path.join(__dirname, "..", "data.js"));
+const { REGLES, MOLECULES, HYDROCORTISONE } = require(path.join(__dirname, "..", "data.js"));
 const L = require(path.join(__dirname, "..", "logic.js"));
 
-const mol = (id) => MOLECULES.find((m) => m.id === id);
+const pred = MOLECULES.prednisone.comprimes;
 
-// Équivalences
-assert.strictEqual(L.convertir(5, mol("prednisone"), mol("hydrocortisone")), 20);
-assert.strictEqual(L.convertir(40, mol("prednisone"), mol("methylprednisolone")), 32);
-assert.strictEqual(L.convertir(5, mol("prednisone"), mol("dexamethasone")), 0.75);
-assert.strictEqual(L.equivPrednisone(16, mol("methylprednisolone")), 20);
+// Composition des comprimés de prednisone
+assert.deepStrictEqual(L.composer(30, pred), [{ dosage: 20, nombre: 1 }, { dosage: 5, nombre: 2 }]);
+assert.deepStrictEqual(L.composer(7.5, pred), [{ dosage: 5, nombre: 1.5 }]);
+assert.deepStrictEqual(L.composer(2.5, pred), [{ dosage: 5, nombre: 0.5 }]);
+assert.deepStrictEqual(L.composer(12, pred), [{ dosage: 5, nombre: 2 }, { dosage: 1, nombre: 2 }]);
+assert.strictEqual(L.composer(10, []), null);
+assert.deepStrictEqual(L.composer(15, HYDROCORTISONE.comprimes), [{ dosage: 10, nombre: 1.5 }]);
 
-// Composition
-assert.deepStrictEqual(L.composer(40, [1, 5, 20], false), [{ dosage: 20, nombre: 2 }]);
-assert.deepStrictEqual(L.composer(27, [1, 5, 20], false), [
-  { dosage: 20, nombre: 1 }, { dosage: 5, nombre: 1 }, { dosage: 1, nombre: 2 }
-]);
-assert.strictEqual(L.composer(2.5, [5, 20], false), null);
-assert.deepStrictEqual(L.composer(2.5, [5, 20], true), [{ dosage: 5, nombre: 0.5 }]);
-assert.deepStrictEqual(L.composer(1.5, [0.5, 4], false), [{ dosage: 0.5, nombre: 3 }]);
+const base = { pasRapide: 5, joursRapide: 7, joursLent: 14, delaiCortisol: 28, cortisol: true };
 
-// Schéma
-const s = L.genererSchema({
-  doseInitiale: 40, joursInitiaux: 7, mode: "mg", pasHaut: 10, joursHaut: 7,
-  seuil: 10, pasBas: 2.5, joursBas: 14, doseFinale: 0, dosages: [1, 5, 20], demi: false
-});
-assert.deepStrictEqual(s.erreurs, []);
-const doses = s.paliers.map((p) => p.dose);
-// 2,5 mg non réalisable avec 1/5/20 sans demi : arrondi au mg le plus proche
-for (let i = 1; i < doses.length; i++) assert.ok(doses[i] < doses[i - 1], "décroissance stricte");
-assert.strictEqual(doses[0], 40);
-assert.ok(doses.includes(10), "le seuil est un palier");
-for (const d of doses) assert.ok(L.composer(d, [1, 5, 20], false), "dose réalisable " + d);
+// Moins de 3 semaines : pas de schéma
+assert.ok(L.calculerPlan({ ...base, dose: 40, duree: "court" }, REGLES).court);
 
-const pct = L.genererSchema({
-  doseInitiale: 60, joursInitiaux: 14, mode: "pct", pasHaut: 25, joursHaut: 7,
-  seuil: 10, pasBas: 1, joursBas: 7, doseFinale: 5, dosages: [1, 5, 20], demi: false
-});
-assert.deepStrictEqual(pct.erreurs, []);
-assert.strictEqual(pct.paliers[pct.paliers.length - 1].dose, 5);
+// 3 semaines à 3 mois : jusqu'à 2,5 mg puis arrêt
+const moyen = L.calculerPlan({ ...base, dose: 30, duree: "moyen" }, REGLES);
+assert.deepStrictEqual(moyen.erreurs, []);
+assert.deepStrictEqual(moyen.paliers.map((p) => p.dose), [30, 25, 20, 15, 10, 7.5, 5, 2.5]);
+assert.deepStrictEqual(moyen.paliers.map((p) => p.jours), [7, 7, 7, 7, 14, 14, 14, 14]);
+assert.strictEqual(moyen.arret, 4 * 7 + 4 * 14);
+assert.strictEqual(moyen.hc, null);
+assert.strictEqual(moyen.cortisol, moyen.arret - 1);
 
-const err = L.genererSchema({
-  doseInitiale: 0, joursInitiaux: 7, mode: "mg", pasHaut: 5, joursHaut: 7,
-  seuil: 10, pasBas: 1, joursBas: 7, doseFinale: 0, dosages: [5], demi: false
-});
-assert.ok(err.erreurs.length > 0);
+// Plus de 3 mois : jusqu'à 7,5 mg puis relais hydrocortisone à la place de 5 mg
+const long = L.calculerPlan({ ...base, dose: 40, duree: "long", pasRapide: 10 }, REGLES);
+assert.deepStrictEqual(long.paliers.map((p) => p.dose), [40, 30, 20, 10, 7.5]);
+assert.strictEqual(long.hc.debut, 3 * 7 + 2 * 14);
+assert.deepStrictEqual([long.hc.total, long.hc.matin, long.hc.midi], [20, 15, 5]);
+assert.strictEqual(long.cortisol, long.hc.debut + 28);
 
-// Données
-for (const m of MOLECULES) {
-  assert.ok(m.equiv > 0, m.id);
-  if (m.oral) assert.ok(m.dosages.length > 0, "dosages manquants pour " + m.id);
+// Dose de départ non multiple : 35 mg avec pas de 10
+const d35 = L.calculerPlan({ ...base, dose: 35, duree: "moyen", pasRapide: 10 }, REGLES);
+assert.deepStrictEqual(d35.paliers.map((p) => p.dose), [35, 25, 15, 10, 7.5, 5, 2.5]);
+
+// Dose de départ basse
+const d8 = L.calculerPlan({ ...base, dose: 8, duree: "moyen" }, REGLES);
+assert.deepStrictEqual(d8.paliers.map((p) => p.dose), [8, 5, 2.5]);
+const d3 = L.calculerPlan({ ...base, dose: 3, duree: "moyen" }, REGLES);
+assert.deepStrictEqual(d3.paliers.map((p) => p.dose), [3]);
+const d4 = L.calculerPlan({ ...base, dose: 4, duree: "long" }, REGLES);
+assert.deepStrictEqual(d4.paliers, []);
+assert.strictEqual(d4.hc.debut, 0);
+
+// Enfant : 10 mg/m²/j, 20 kg et 115 cm => SC 0,80 m² => 7,5 mg (5 + 2,5)
+const enf = L.calculerPlan({ ...base, dose: 20, duree: "long", enfant: true, poids: 20, taille: 115 }, REGLES);
+assert.deepStrictEqual([enf.hc.total, enf.hc.matin, enf.hc.midi], [7.5, 5, 2.5]);
+assert.ok(L.calculerPlan({ ...base, dose: 20, duree: "long", enfant: true }, REGLES).erreurs.length);
+
+// Toutes les doses générées sont réalisables en comprimés de prednisone
+for (let dose = 1; dose <= 120; dose++) {
+  for (const duree of ["moyen", "long"]) {
+    const p = L.calculerPlan({ ...base, dose, duree }, REGLES);
+    for (let i = 1; i < p.paliers.length; i++) assert.ok(p.paliers[i].dose < p.paliers[i - 1].dose);
+    assert.ok(L.totalComprimes(p.paliers, pred), "composition impossible pour " + dose);
+  }
 }
+
+// Total pour la pharmacie
+assert.deepStrictEqual(L.totalComprimes([{ dose: 7.5, jours: 14 }], pred), [{ dosage: 5, nombre: 21 }]);
 
 console.log("Tous les tests passent.");

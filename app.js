@@ -1,243 +1,196 @@
-/* Interface : lie data.js et logic.js à la page. */
+/* Interface : lit le formulaire, calcule le plan et rédige le texte d'ordonnance. */
 
 const $ = (id) => document.getElementById(id);
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
-const fmt = (x) => nf.format(x);
-const molParId = (id) => MOLECULES.find((m) => m.id === id);
+const mg = (x) => nf.format(x) + " mg";
+const radio = (nom) => document.querySelector(`input[name="${nom}"]:checked`).value;
 
-/* ---------- Onglets ---------- */
-const onglets = [...document.querySelectorAll('[role="tab"]')];
-function activer(tab) {
-  for (const t of onglets) {
-    const actif = t === tab;
-    t.setAttribute("aria-selected", String(actif));
-    $(t.getAttribute("aria-controls")).hidden = !actif;
-  }
-  try { localStorage.setItem("onglet", tab.id); } catch (e) {}
-}
-onglets.forEach((t) => t.addEventListener("click", () => activer(t)));
-try {
-  const memo = localStorage.getItem("onglet");
-  if (memo && $(memo)) activer($(memo));
-} catch (e) {}
-
-/* ---------- Classes et équivalences ---------- */
-function remplirSelect(select, liste, defaut) {
-  select.innerHTML = liste.map((m) => `<option value="${m.id}">${m.nom}</option>`).join("");
-  select.value = defaut;
+/* ---------- Dates ---------- */
+function dateDe(jour) {
+  const d = new Date($("debut").value + "T00:00:00");
+  d.setDate(d.getDate() + jour);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function rendreTableClasses() {
-  const tbody = $("table-classes").querySelector("tbody");
-  let html = "";
-  for (const cle of Object.keys(CLASSES)) {
-    const c = CLASSES[cle];
-    html += `<tr class="groupe"><th colspan="5">${c.label} <span>(demi-vie biologique ${c.demivie})</span></th></tr>`;
-    for (const m of MOLECULES.filter((x) => x.classe === cle)) {
-      html += `<tr>
-        <td><strong>${m.nom}</strong><div class="note">${m.note}</div></td>
-        <td class="num">${fmt(m.equiv)} mg</td>
-        <td class="num">${fmt(m.antiInfl)}</td>
-        <td class="num">${fmt(m.mineralo)}</td>
-        <td>${m.specialites.length ? m.specialites.join("<br>") : "<span class=\"note\">Aucune forme orale</span>"}</td>
-      </tr>`;
-    }
-  }
-  tbody.innerHTML = html;
+/* ---------- Comprimés ---------- */
+function quantite(n) {
+  const entier = Math.floor(n);
+  const demi = n - entier >= 0.5;
+  if (!entier) return "½ cp";
+  return entier + " cp" + (demi ? " ½" : "");
+}
+function texteComposition(compo) {
+  return compo.map((c) => `${quantite(c.nombre)} à ${mg(c.dosage)}`).join(" + ");
 }
 
-function rendreConversion() {
-  const dose = parseFloat($("conv-dose").value);
-  const source = molParId($("conv-mol").value);
-  const sortie = $("conv-resultat");
-  if (!(dose >= 0)) { sortie.innerHTML = ""; return; }
-  sortie.innerHTML = MOLECULES.map((m) => {
-    const v = convertir(dose, source, m);
-    return `<div class="equiv${m.id === source.id ? " source" : ""}">
-      <span class="equiv-nom">${m.nom}</span>
-      <span class="equiv-dose">${fmt(v)} mg</span>
-    </div>`;
-  }).join("");
+/* ---------- Réglages (préférences mémorisées, aucune donnée patient) ---------- */
+function options(select, valeurs, suffixe) {
+  select.innerHTML = valeurs.map((v) => `<option value="${v}">${nf.format(v)} ${suffixe}</option>`).join("");
+}
+options($("pasRapide"), REGLES.pasRapideOptions, "mg");
+options($("joursRapide"), REGLES.joursRapideOptions, "jours");
+options($("joursLent"), REGLES.joursLentOptions, "jours");
+options($("delaiCortisol"), REGLES.delaiCortisolOptions, "jours");
+$("hcAdulte").innerHTML = REGLES.hcAdulteOptions
+  .map((h, i) => `<option value="${i}">${h.total} mg/j (${h.matin} + ${h.midi})</option>`).join("");
+
+const PREFS = ["opt-secretariat", "opt-consignes", "opt-cortisol"];
+function appliquerDefauts() {
+  const d = REGLES.defauts[radio("patient")];
+  for (const k of ["pasRapide", "joursRapide", "joursLent", "delaiCortisol"]) $(k).value = d[k];
+}
+function chargerPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem("prefs") || "{}");
+    if (typeof p.secretariat === "boolean") $("opt-secretariat").checked = p.secretariat;
+  } catch (e) {}
+}
+function sauverPrefs() {
+  try { localStorage.setItem("prefs", JSON.stringify({ secretariat: $("opt-secretariat").checked })); } catch (e) {}
 }
 
-remplirSelect($("conv-mol"), MOLECULES, "prednisone");
-rendreTableClasses();
-rendreConversion();
-$("conv-dose").addEventListener("input", rendreConversion);
-$("conv-mol").addEventListener("change", rendreConversion);
-
-/* ---------- Schéma de décroissance ---------- */
-const orales = MOLECULES.filter((m) => m.oral);
-remplirSelect($("s-mol"), orales, "prednisone");
-$("s-debut").value = new Date().toISOString().slice(0, 10);
-
-function rendreDosages() {
-  const m = molParId($("s-mol").value);
-  $("s-dosages").innerHTML = m.dosages.map((d) =>
-    `<label class="case"><input type="checkbox" value="${d}" checked> ${fmt(d)} mg</label>`
-  ).join("");
+/* Les options cortisolémie et consignes suivent la durée choisie, modifiables ensuite. */
+function optionsSelonDuree() {
+  const long = radio("duree") === "long";
+  $("opt-cortisol").checked = long;
+  $("opt-consignes").checked = long;
 }
 
-/* Quand la molécule change, on convertit les doses saisies. */
-let molPrecedente = molParId($("s-mol").value);
-function changerMolecule() {
-  const m = molParId($("s-mol").value);
-  for (const id of ["s-dose", "s-seuil", "s-pas-bas", "s-finale"]) {
-    const v = parseFloat($(id).value);
-    if (v >= 0) $(id).value = +convertir(v, molPrecedente, m).toFixed(2);
-  }
-  if ($("s-mode").value === "mg") {
-    const v = parseFloat($("s-pas-haut").value);
-    if (v >= 0) $("s-pas-haut").value = +convertir(v, molPrecedente, m).toFixed(2);
-  }
-  molPrecedente = m;
-  rendreDosages();
-  // les pas en mg sont ramenés au plus petit écart réalisable avec les dosages
-  const pas = granularite(m.dosages, $("s-demi").checked);
-  const pasIds = $("s-mode").value === "mg" ? ["s-pas-haut", "s-pas-bas"] : ["s-pas-bas"];
-  for (const id of pasIds) {
-    const v = parseFloat($(id).value);
-    if (pas && v >= 0) $(id).value = Math.max(pas, arrondir(v, pas));
-  }
-  rendreSchema();
-}
+/* ---------- Rédaction ---------- */
+const CONDUITE = {
+  court: "Moins de 3 semaines : arrêt sans décroissance possible, sauf risque de rebond de la maladie.",
+  moyen: "3 semaines à 3 mois : décroissance jusqu'à l'arrêt. Relais hydrocortisone non systématique (à discuter si signes de sevrage ou doses très élevées).",
+  long: "Plus de 3 mois : décroissance jusqu'à 5 mg/j puis relais hydrocortisone, patient en insuffisance surrénale potentielle."
+};
 
-function lireParams() {
-  const num = (id) => parseFloat($(id).value);
-  return {
-    doseInitiale: num("s-dose"),
-    joursInitiaux: Math.round(num("s-jours")),
-    mode: $("s-mode").value,
-    pasHaut: num("s-pas-haut"),
-    joursHaut: Math.round(num("s-jours-haut")),
-    seuil: num("s-seuil") || 0,
-    pasBas: num("s-pas-bas"),
-    joursBas: Math.round(num("s-jours-bas")),
-    doseFinale: num("s-finale") || 0,
-    dosages: [...$("s-dosages").querySelectorAll("input:checked")].map((c) => parseFloat(c.value)),
-    demi: $("s-demi").checked
+function rediger() {
+  const duree = radio("duree");
+  const enfant = radio("patient") === "enfant";
+  const mol = MOLECULES[radio("molecule")];
+  const params = {
+    dose: parseFloat($("dose").value),
+    duree,
+    enfant,
+    poids: parseFloat($("poids").value),
+    taille: parseFloat($("taille").value),
+    pasRapide: parseFloat($("pasRapide").value),
+    joursRapide: parseInt($("joursRapide").value, 10),
+    joursLent: parseInt($("joursLent").value, 10),
+    delaiCortisol: parseInt($("delaiCortisol").value, 10),
+    hcAdulteIndex: parseInt($("hcAdulte").value, 10),
+    cortisol: $("opt-cortisol").checked
   };
-}
 
-function ajouterJours(date, n) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-const fmtDate = (d) => d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  $("conduite").textContent = CONDUITE[duree];
+  $("ligne-enfant").hidden = !enfant;
+  $("lbl-hc").hidden = enfant;
+  $("sc").textContent = enfant && params.poids > 0 && params.taille > 0
+    ? `SC ${nf.format(Math.round(surfaceCorporelle(params.poids, params.taille) * 100) / 100)} m²`
+    : "";
 
-function texteComprimes(compo) {
-  if (!compo) return "non réalisable";
-  if (!compo.length) return "";
-  return compo.map((c) => {
-    const n = c.nombre;
-    const nb = n === 0.5 ? "½" : fmt(n);
-    return `${nb} cp de ${fmt(c.dosage)} mg`;
-  }).join(" + ");
-}
+  const plan = calculerPlan(params, REGLES);
+  const blocs = [];
+  const rappels = [];
 
-let dernierTexte = "";
-
-function rendreSchema() {
-  const m = molParId($("s-mol").value);
-  const p = lireParams();
-  const debut = new Date($("s-debut").value + "T00:00:00");
-  const tbody = $("table-schema").querySelector("tbody");
-  const { paliers, erreurs } = genererSchema(p);
-
-  const seuilPred = equivPrednisone(p.seuil, m);
-  $("s-aide-seuil").textContent =
-    `Seuil actuel : ${fmt(seuilPred)} mg/j en équivalent prednisone. ` +
-    `Sous ce seuil, la décroissance se fait par paliers fixes en mg.`;
-
-  $("s-erreurs").hidden = !erreurs.length;
-  $("s-erreurs").innerHTML = erreurs.map((e) => `<p>${e}</p>`).join("");
-  if (erreurs.length || isNaN(debut)) {
-    tbody.innerHTML = "";
-    $("s-resume").innerHTML = "";
-    $("s-alertes").innerHTML = "";
-    dernierTexte = "";
+  if (plan.court) {
+    $("texte").value = "";
+    $("texte").placeholder = "Pas de schéma de décroissance nécessaire.";
+    $("rappels").innerHTML = "";
+    return;
+  }
+  if (plan.erreurs.length) {
+    $("texte").value = "";
+    $("texte").placeholder = plan.erreurs.join("\n");
+    $("rappels").innerHTML = "";
     return;
   }
 
-  let jour = 0;
-  let cumul = 0;
-  let joursAuDessus75 = 0;
-  const lignes = [];
-  const texte = [];
-  for (const pal of paliers) {
-    const du = ajouterJours(debut, jour);
-    const au = ajouterJours(debut, jour + pal.jours - 1);
-    const compo = composer(pal.dose, p.dosages, p.demi);
-    const eq = equivPrednisone(pal.dose, m);
-    cumul += pal.dose * pal.jours;
-    if (eq >= 7.5) joursAuDessus75 += pal.jours;
-    lignes.push(`<tr${compo ? "" : ' class="invalide"'}>
-      <td>${fmtDate(du)}</td><td>${fmtDate(au)}</td>
-      <td class="num">${pal.jours}</td>
-      <td class="num"><strong>${fmt(pal.dose)}</strong></td>
-      <td>${texteComprimes(compo)}</td>
-      <td class="num">${fmt(eq)}</td>
-    </tr>`);
-    texte.push(`du ${fmtDate(du)} au ${fmtDate(au)} : ${fmt(pal.dose)} mg/j (${texteComprimes(compo)})`);
-    jour += pal.jours;
+  // Bloc corticoïde
+  if (plan.paliers.length) {
+    const lignes = [`${mol.nom.toUpperCase()} (${mol.specialite}), en une prise le matin :`];
+    for (const p of plan.paliers) {
+      const compo = composer(p.dose, mol.comprimes);
+      const detail = compo && compo.length ? ` : ${texteComposition(compo)}` : "";
+      lignes.push(`- ${mg(p.dose)}/j du ${dateDe(p.debut)} au ${dateDe(p.debut + p.jours - 1)}${detail}`);
+    }
+    lignes.push(plan.hc
+      ? `- Arrêt le ${dateDe(plan.arret)}, relais par hydrocortisone le même jour.`
+      : `- Arrêt le ${dateDe(plan.arret)}.`);
+    const total = totalComprimes(plan.paliers, mol.comprimes);
+    if (total) lignes.push(`Soit au total : ${total.map((t) => `${t.nombre} cp à ${mg(t.dosage)}`).join(", ")}.`);
+    blocs.push(lignes.join("\n"));
   }
-  const fin = ajouterJours(debut, jour);
-  const derniere = paliers[paliers.length - 1].dose;
-  const finLigne = derniere > 0 && p.doseFinale > 0
-    ? `Poursuite à ${fmt(derniere)} mg/j à partir du ${fmtDate(fin)}, puis réévaluation.`
-    : `Arrêt le ${fmtDate(fin)}.`;
-  lignes.push(`<tr class="fin"><td colspan="6">${finLigne}</td></tr>`);
-  tbody.innerHTML = lignes.join("");
 
-  $("s-resume").innerHTML = `
-    <div><span>Durée totale</span><strong>${jour} jours</strong></div>
-    <div><span>Paliers</span><strong>${paliers.length}</strong></div>
-    <div><span>Dose cumulée</span><strong>${fmt(cumul)} mg</strong></div>
-    <div><span>Cumul éq. prednisone</span><strong>${fmt(equivPrednisone(cumul, m))} mg</strong></div>`;
+  // Bloc hydrocortisone
+  if (plan.hc) {
+    const h = plan.hc;
+    const prise = (dose, moment) => {
+      const c = composer(dose, HYDROCORTISONE.comprimes);
+      return `${mg(dose)} ${moment}` + (c ? ` (${c.map((x) => quantite(x.nombre)).join(" + ")})` : "");
+    };
+    const moments = [prise(h.matin, "le matin")];
+    if (h.midi > 0) moments.push(prise(h.midi, "à midi"));
+    blocs.push([
+      `HYDROCORTISONE (${HYDROCORTISONE.specialite}, cp sécable), à partir du ${dateDe(h.debut)} :`,
+      `- ${moments.join(" et ")}, soit ${mg(h.total)}/j. Aucune prise après 16 h.`,
+      `- À poursuivre jusqu'à nouvel avis médical. Ne pas arrêter brutalement.`
+    ].join("\n"));
+    if (!composer(h.matin, HYDROCORTISONE.comprimes) || !composer(h.midi, HYDROCORTISONE.comprimes)) {
+      rappels.push("Dose d'hydrocortisone non réalisable en comprimés de 10 mg : prescrire une forme adaptée à l'enfant.");
+    }
+    if (enfant) rappels.push(`Relais calculé à ${REGLES.hcEnfantMgParM2} mg/m²/j, arrondi à 2,5 mg, 2/3 le matin et 1/3 à midi.`);
+  }
 
-  const alertes = [];
-  if (joursAuDessus75 > 21) {
-    alertes.push("Plus de 3 semaines à 7,5 mg/j ou plus d'équivalent prednisone : risque d'insuffisance surrénalienne. Décroissance lente sous la dose physiologique et évaluation de l'axe corticotrope à discuter avant l'arrêt.");
-  }
-  if (m.classe === "longue") {
-    alertes.push("Molécule à longue durée d'action : freination de l'axe corticotrope plus importante qu'avec la prednisone à dose équivalente.");
-  }
-  if (lignes.some((l) => l.includes("invalide"))) {
-    alertes.push("Certaines doses ne sont pas réalisables avec les dosages cochés : ajouter un dosage, autoriser les demi-comprimés ou modifier les pas.");
-  }
-  $("s-alertes").innerHTML = alertes.map((a) => `<p class="avert">${a}</p>`).join("");
+  if (plan.cortisol !== null) blocs.push(TEXTES.cortisol(dateDe(plan.cortisol)));
+  if ($("opt-consignes").checked) blocs.push(TEXTES.consignesHC);
+  if ($("opt-secretariat").checked) blocs.push(TEXTES.secretariat);
 
-  const intitule = `${m.nom} (${m.specialites[0] || ""})`;
-  $("impr-titre").textContent = `${intitule}, schéma débutant le ${fmtDate(debut)}`;
-  dernierTexte = `${m.nom}, en une prise le matin :\n` +
-    texte.map((t) => "- " + t).join("\n") + `\n${finLigne}`;
+  if (duree === "long" && params.dose >= 7.5) {
+    rappels.push("Corticothérapie prolongée : vitamine D et calcium, évaluation du risque fracturaire (DMO), surveillance glycémique, tensionnelle et ophtalmologique.");
+  }
+  if (duree === "moyen" && $("opt-consignes").checked && !plan.hc) {
+    rappels.push("Consignes hydrocortisone ajoutées sans relais hydrocortisone prescrit.");
+  }
+
+  $("texte").value = blocs.join("\n\n");
+  ajusterHauteur();
+  $("rappels").innerHTML = rappels.map((r) => `<p>${r}</p>`).join("");
 }
 
-$("s-mol").addEventListener("change", changerMolecule);
-$("s-mode").addEventListener("change", () => {
-  // valeurs par défaut cohérentes lors du changement d'unité
-  $("s-pas-haut").value = $("s-mode").value === "pct" ? 25 : +convertir(5, molParId("prednisone"), molParId($("s-mol").value)).toFixed(2);
-  rendreSchema();
-});
-$("form-schema").addEventListener("input", rendreSchema);
-$("form-schema").addEventListener("change", rendreSchema);
-$("form-schema").addEventListener("submit", (e) => e.preventDefault());
+function ajusterHauteur() {
+  const t = $("texte");
+  t.style.height = "auto";
+  t.style.height = Math.max(120, t.scrollHeight + 4) + "px";
+}
 
-$("b-imprimer").addEventListener("click", () => window.print());
-$("b-copier").addEventListener("click", async () => {
-  if (!dernierTexte) return;
-  const bouton = $("b-copier");
+/* ---------- Copie ---------- */
+$("copier").addEventListener("click", async () => {
+  const t = $("texte");
+  if (!t.value) return;
   try {
-    await navigator.clipboard.writeText(dernierTexte);
-    bouton.textContent = "Copié";
+    await navigator.clipboard.writeText(t.value);
   } catch (e) {
-    window.prompt("Copier le texte :", dernierTexte);
+    t.select();
+    document.execCommand("copy");
   }
-  setTimeout(() => (bouton.textContent = "Copier le texte"), 1500);
+  $("copier").textContent = "Copié";
+  $("copier").classList.add("ok");
+  setTimeout(() => { $("copier").textContent = "Copier"; $("copier").classList.remove("ok"); }, 1500);
 });
 
-rendreDosages();
-rendreSchema();
+/* ---------- Événements ---------- */
+$("f").addEventListener("change", (e) => {
+  if (e.target.name === "patient") appliquerDefauts();
+  if (e.target.name === "duree") optionsSelonDuree();
+  if (e.target.id === "opt-secretariat") sauverPrefs();
+  rediger();
+});
+$("f").addEventListener("input", rediger);
+$("f").addEventListener("submit", (e) => e.preventDefault());
 
-$("version").textContent = `Version ${APP_VERSION}, mise à jour du ${new Date(APP_DATE + "T00:00:00").toLocaleDateString("fr-FR")}`;
+$("debut").value = new Date().toISOString().slice(0, 10);
+appliquerDefauts();
+optionsSelonDuree();
+chargerPrefs();
+rediger();
+$("version").textContent = `Version ${APP_VERSION} du ${new Date(APP_DATE + "T00:00:00").toLocaleDateString("fr-FR")}`;

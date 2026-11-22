@@ -4,154 +4,126 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Corticodermato</title>
-  <meta name="description" content="Aide à la prescription des corticoïdes systémiques : équivalences et schémas de décroissance.">
+  <meta name="description" content="Schémas de décroissance des corticoïdes prêts à copier dans une ordonnance.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="entete">
+  <header>
     <h1>Corticodermato</h1>
-    <p class="sous-titre">Corticoïdes systémiques : équivalences et schémas de décroissance</p>
+    <p class="sous-titre">Décroissance des corticoïdes, prête pour l'ordonnance</p>
   </header>
 
-  <nav class="onglets" role="tablist">
-    <button role="tab" aria-selected="true" aria-controls="p-classes" id="t-classes">Classes et équivalences</button>
-    <button role="tab" aria-selected="false" aria-controls="p-schema" id="t-schema">Schéma de décroissance</button>
-  </nav>
-
-  <main>
-    <!-- Onglet 1 : classes et équivalences -->
-    <section id="p-classes" role="tabpanel" aria-labelledby="t-classes">
-      <div class="carte">
-        <h2>Convertisseur</h2>
-        <div class="ligne-form">
-          <label>Dose
-            <input type="number" id="conv-dose" value="20" min="0" step="any" inputmode="decimal">
-          </label>
-          <label>mg de
-            <select id="conv-mol"></select>
-          </label>
-        </div>
-        <div id="conv-resultat" class="grille-equiv"></div>
+  <form id="f" autocomplete="off">
+    <div class="ligne">
+      <span class="etiquette">Patient</span>
+      <div class="segment">
+        <label><input type="radio" name="patient" value="adulte" checked><span>Adulte</span></label>
+        <label><input type="radio" name="patient" value="enfant"><span>Enfant</span></label>
       </div>
+    </div>
 
-      <div class="carte">
-        <h2>Classes</h2>
-        <div class="table-defile">
-          <table id="table-classes">
-            <thead>
-              <tr>
-                <th>Molécule</th>
-                <th>Dose équivalente</th>
-                <th>Activité anti-inflammatoire</th>
-                <th>Activité minéralocorticoïde</th>
-                <th>Spécialités (France)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p class="note">Doses équivalentes en activité anti-inflammatoire (5 mg de prednisone). Activités relatives à l'hydrocortisone (= 1).</p>
+    <div class="ligne" id="ligne-enfant" hidden>
+      <span class="etiquette">Mesures</span>
+      <div class="champs">
+        <label class="champ"><input type="number" id="poids" min="1" step="any" inputmode="decimal" placeholder="Poids"><span>kg</span></label>
+        <label class="champ"><input type="number" id="taille" min="30" step="any" inputmode="decimal" placeholder="Taille"><span>cm</span></label>
+        <span class="info" id="sc"></span>
       </div>
-    </section>
+    </div>
 
-    <!-- Onglet 2 : schéma de décroissance -->
-    <section id="p-schema" role="tabpanel" aria-labelledby="t-schema" hidden>
-      <form class="carte" id="form-schema" autocomplete="off">
-        <h2>Paramètres</h2>
-        <div class="ligne-form">
-          <label>Molécule
-            <select id="s-mol"></select>
-          </label>
-          <label>Date de début
-            <input type="date" id="s-debut">
-          </label>
-        </div>
-        <fieldset>
-          <legend>Dosages disponibles</legend>
-          <div id="s-dosages" class="cases"></div>
-          <label class="case"><input type="checkbox" id="s-demi"> Autoriser les demi-comprimés</label>
-        </fieldset>
-
-        <div class="ligne-form">
-          <label>Dose initiale (mg/j)
-            <input type="number" id="s-dose" value="40" min="0" step="any" inputmode="decimal">
-          </label>
-          <label>Durée (jours)
-            <input type="number" id="s-jours" value="7" min="1" step="1" inputmode="numeric">
-          </label>
-        </div>
-
-        <fieldset>
-          <legend>Au-dessus du seuil</legend>
-          <div class="ligne-form">
-            <label>Seuil (mg/j)
-              <input type="number" id="s-seuil" value="10" min="0" step="any" inputmode="decimal">
-            </label>
-            <label>Diminuer de
-              <span class="avec-unite">
-                <input type="number" id="s-pas-haut" value="5" min="0" step="any" inputmode="decimal">
-                <select id="s-mode" aria-label="Unité de décroissance">
-                  <option value="mg">mg</option>
-                  <option value="pct">%</option>
-                </select>
-              </span>
-            </label>
-            <label>Tous les (jours)
-              <input type="number" id="s-jours-haut" value="7" min="1" step="1" inputmode="numeric">
-            </label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Sous le seuil</legend>
-          <div class="ligne-form">
-            <label>Diminuer de (mg)
-              <input type="number" id="s-pas-bas" value="1" min="0" step="any" inputmode="decimal">
-            </label>
-            <label>Tous les (jours)
-              <input type="number" id="s-jours-bas" value="7" min="1" step="1" inputmode="numeric">
-            </label>
-            <label>Dose finale (mg/j)
-              <input type="number" id="s-finale" value="0" min="0" step="any" inputmode="decimal">
-            </label>
-          </div>
-        </fieldset>
-        <p class="note" id="s-aide-seuil"></p>
-      </form>
-
-      <div class="carte" id="schema-sortie">
-        <div class="titre-actions">
-          <h2>Schéma</h2>
-          <div class="actions">
-            <button type="button" id="b-copier">Copier le texte</button>
-            <button type="button" id="b-imprimer">Imprimer</button>
-          </div>
-        </div>
-        <p class="impression-seule" id="impr-titre"></p>
-        <div id="s-erreurs" class="alerte" hidden></div>
-        <div id="s-resume" class="resume"></div>
-        <div class="table-defile">
-          <table id="table-schema">
-            <thead>
-              <tr>
-                <th>Du</th>
-                <th>Au</th>
-                <th>Jours</th>
-                <th>Dose (mg/j)</th>
-                <th>Comprimés par jour</th>
-                <th>Éq. prednisone</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div id="s-alertes"></div>
+    <div class="ligne">
+      <span class="etiquette">Molécule</span>
+      <div class="segment">
+        <label><input type="radio" name="molecule" value="prednisone" checked><span>Prednisone</span></label>
+        <label><input type="radio" name="molecule" value="prednisolone"><span>Prednisolone</span></label>
       </div>
-    </section>
-  </main>
+    </div>
 
-  <footer class="pied">
-    <p>Outil d'aide à la prescription. Ne remplace pas le jugement clinique ni le RCP des spécialités. Aucune donnée saisie n'est enregistrée.</p>
+    <div class="ligne">
+      <span class="etiquette">Dose actuelle</span>
+      <div class="champs">
+        <label class="champ"><input type="number" id="dose" value="30" min="0" step="any" inputmode="decimal"><span>mg/j</span></label>
+        <label class="champ"><span>à partir du</span><input type="date" id="debut"></label>
+      </div>
+    </div>
+
+    <div class="ligne">
+      <span class="etiquette">Corticothérapie depuis</span>
+      <div class="segment">
+        <label><input type="radio" name="duree" value="court"><span>&lt; 3 semaines</span></label>
+        <label><input type="radio" name="duree" value="moyen" checked><span>3 sem. à 3 mois</span></label>
+        <label><input type="radio" name="duree" value="long"><span>&gt; 3 mois</span></label>
+      </div>
+    </div>
+
+    <p class="conduite" id="conduite"></p>
+
+    <div class="ligne">
+      <span class="etiquette">Ajouter</span>
+      <div class="cases">
+        <label><input type="checkbox" id="opt-cortisol"> Cortisolémie 8 h</label>
+        <label><input type="checkbox" id="opt-consignes"> Consignes hydrocortisone</label>
+        <label><input type="checkbox" id="opt-secretariat" checked> Adresse secrétariat Timone</label>
+      </div>
+    </div>
+
+    <details class="reglages">
+      <summary>Rythme de décroissance</summary>
+      <div class="grille-reglages">
+        <label>Au-dessus de 10 mg/j, baisser de
+          <select id="pasRapide"></select>
+        </label>
+        <label>tous les
+          <select id="joursRapide"></select>
+        </label>
+        <label>De 10 à 2,5 mg/j, paliers de 2,5 mg tous les
+          <select id="joursLent"></select>
+        </label>
+        <label id="lbl-hc">Relais hydrocortisone (adulte)
+          <select id="hcAdulte"></select>
+        </label>
+        <label>Cortisolémie après
+          <select id="delaiCortisol"></select>
+        </label>
+      </div>
+    </details>
+  </form>
+
+  <section class="sortie">
+    <div class="sortie-tete">
+      <h2>Ordonnance</h2>
+      <button type="button" id="copier" class="principal">Copier</button>
+    </div>
+    <textarea id="texte" spellcheck="false" aria-label="Texte de l'ordonnance, modifiable avant copie"></textarea>
+    <div id="rappels"></div>
+  </section>
+
+  <details class="fiche">
+    <summary>Fiche réflexe</summary>
+    <h3>Cortisolémie à 8 h (après 2 à 4 semaines d'hydrocortisone ou sous 2,5 mg/j de prednisone)</h3>
+    <p>Prélèvement à 8 h, à jeun, avant la prise matinale (dernière prise d'hydrocortisone la veille à midi).</p>
+    <table>
+      <thead><tr><th>Cortisol 8 h</th><th>Interprétation</th><th>Conduite</th></tr></thead>
+      <tbody>
+        <tr><td>&lt; 140 nmol/L (&lt; 50 ng/mL)</td><td>Insuffisance surrénale</td><td>Maintenir l'hydrocortisone, avis endocrinologique, contrôle dans 3 à 6 mois.</td></tr>
+        <tr><td>140 à 360 nmol/L (50 à 130 ng/mL)</td><td>Zone grise</td><td>Maintenir l'hydrocortisone, test au Synacthène ou avis endocrinologique.</td></tr>
+        <tr><td>&gt; 360 nmol/L (&gt; 130 ng/mL)</td><td>Axe récupéré</td><td>Arrêt de l'hydrocortisone, direct ou sur 1 à 2 semaines.</td></tr>
+      </tbody>
+    </table>
+    <p>La récupération complète de l'axe corticotrope prend souvent 6 à 12 mois, parfois plus d'un an.</p>
+
+    <h3>Décroissance de l'hydrocortisone</h3>
+    <p>Baisser de 2,5 mg toutes les 1 à 2 semaines jusqu'à 10 mg/j, puis 5 mg/j pendant 2 à 4 semaines avant l'arrêt.</p>
+
+    <h3>Doses de stress</h3>
+    <p><strong>Stress mineur ou modéré</strong> (fièvre &gt; 38,5 °C, infection, soins dentaires, traumatisme) : doubler la dose d'hydrocortisone (adulte : 40 à 60 mg/j) pendant 48 à 72 h.</p>
+    <p><strong>Vomissements, diarrhée ou stress majeur</strong> : urgences, hydrocortisone IV ou IM immédiate.<br>
+      Adulte : 100 mg puis 50 mg toutes les 6 h.<br>
+      Enfant : 25 mg (&lt; 3 ans), 50 mg (3 à 12 ans), 100 mg (&gt; 12 ans).</p>
+  </details>
+
+  <footer>
+    <p>Outil d'aide à la prescription. Ne remplace pas le jugement clinique. Aucune donnée saisie n'est enregistrée.</p>
     <p id="version"></p>
   </footer>
 

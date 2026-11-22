@@ -1,149 +1,151 @@
 /*
- * Logique de calcul, sans dépendance à la page.
- * Testée par tests/test.js (node tests/test.js).
+ * Calcul du plan de décroissance, sans dépendance à la page.
+ * Testé par tests/test.js (node tests/test.js).
  */
 
-const CENT = 100; // calculs en centièmes de mg pour éviter les erreurs d'arrondi
-
-function toUnits(mg) {
-  return Math.round(mg * CENT);
-}
+const CENT = 100; // calculs en centièmes de mg
 
 function gcd(a, b) {
   while (b) [a, b] = [b, a % b];
   return a;
 }
 
-/* Conversion d'une dose d'une molécule vers une autre. */
-function convertir(dose, depuis, vers) {
-  return (dose / depuis.equiv) * vers.equiv;
-}
-
-function equivPrednisone(dose, molecule) {
-  return (dose / molecule.equiv) * 5;
-}
-
-/*
- * Pièces disponibles : comprimés entiers et, si autorisé, demi-comprimés.
- * Retourne [{ mg, dosage, fraction }]
- */
-function pieces(dosages, demi) {
-  const list = [];
-  for (const d of dosages) {
-    list.push({ mg: d, dosage: d, fraction: 1 });
-    if (demi) list.push({ mg: d / 2, dosage: d, fraction: 0.5 });
-  }
-  return list;
-}
-
-/* Plus petit pas de dose réalisable avec les pièces disponibles. */
-function granularite(dosages, demi) {
-  const p = pieces(dosages, demi);
-  if (!p.length) return null;
-  return p.map((x) => toUnits(x.mg)).reduce(gcd) / CENT;
-}
-
 /*
  * Composition d'une dose avec le moins de prises possible.
- * Retourne null si la dose n'est pas réalisable.
- * Résultat : [{ dosage, nombre }] où nombre peut être 0,5, 1, 1,5...
+ * comprimes : [{ dosage, secable }]
+ * Retourne [{ dosage, nombre }] (nombre peut valoir 0,5, 1,5...) ou null.
  */
-function composer(dose, dosages, demi) {
+function composer(dose, comprimes) {
+  if (!comprimes || !comprimes.length) return null;
   if (dose === 0) return [];
-  const p = pieces(dosages, demi);
-  if (!p.length) return null;
-  const g = p.map((x) => toUnits(x.mg)).reduce(gcd);
-  const cible = toUnits(dose);
+  const pieces = [];
+  for (const c of comprimes) {
+    pieces.push({ unites: Math.round(c.dosage * CENT), dosage: c.dosage, fraction: 1, cout: 1 });
+    if (c.secable) pieces.push({ unites: Math.round((c.dosage / 2) * CENT), dosage: c.dosage, fraction: 0.5, cout: 2.01 }); // couper un comprimé coûte plus que prendre un entier
+  }
+  const g = pieces.map((p) => p.unites).reduce(gcd);
+  const cible = Math.round(dose * CENT);
   if (cible % g !== 0) return null;
   const n = cible / g;
-  if (n > 200000) return null;
-  const tailles = p.map((x) => toUnits(x.mg) / g);
+  const tailles = pieces.map((p) => p.unites / g);
   const cout = new Array(n + 1).fill(Infinity);
   const choix = new Array(n + 1).fill(-1);
   cout[0] = 0;
   for (let i = 1; i <= n; i++) {
-    for (let j = 0; j < tailles.length; j++) {
+    for (let j = 0; j < pieces.length; j++) {
       const t = tailles[j];
-      // un demi-comprimé compte un peu plus qu'un entier : on préfère les entiers
-      const c = p[j].fraction === 1 ? 1 : 1.01;
-      if (t <= i && cout[i - t] + c < cout[i]) {
-        cout[i] = cout[i - t] + c;
+      if (t <= i && cout[i - t] + pieces[j].cout < cout[i]) {
+        cout[i] = cout[i - t] + pieces[j].cout;
         choix[i] = j;
       }
     }
   }
   if (cout[n] === Infinity) return null;
   const parDosage = new Map();
-  let i = n;
-  while (i > 0) {
-    const piece = p[choix[i]];
-    parDosage.set(piece.dosage, (parDosage.get(piece.dosage) || 0) + piece.fraction);
-    i -= tailles[choix[i]];
+  for (let i = n; i > 0; i -= tailles[choix[i]]) {
+    const p = pieces[choix[i]];
+    parDosage.set(p.dosage, (parDosage.get(p.dosage) || 0) + p.fraction);
   }
   return [...parDosage.entries()]
     .sort((a, b) => b[0] - a[0])
     .map(([dosage, nombre]) => ({ dosage, nombre }));
 }
 
-function arrondir(dose, pas) {
-  return Math.round(toUnits(dose) / toUnits(pas)) * pas;
+/* Surface corporelle (Mosteller), poids en kg, taille en cm. */
+function surfaceCorporelle(poids, taille) {
+  return Math.sqrt((poids * taille) / 3600);
+}
+
+const arrondi25 = (x) => Math.round(x / 2.5) * 2.5;
+
+/* Dose d'hydrocortisone de relais : { total, matin, midi } en mg/j. */
+function doseHC(params, regles) {
+  if (params.enfant) {
+    const sc = surfaceCorporelle(params.poids, params.taille);
+    const total = Math.max(2.5, arrondi25(sc * regles.hcEnfantMgParM2));
+    let matin = arrondi25((total * 2) / 3);
+    if (matin >= total) matin = total;
+    return { total, matin, midi: total - matin, surface: sc };
+  }
+  return regles.hcAdulteOptions[params.hcAdulteIndex || 0];
 }
 
 /*
- * Génère un schéma de décroissance.
  * params : {
- *   doseInitiale, joursInitiaux,
- *   mode: "mg" | "pct", pasHaut, joursHaut,
- *   seuil, pasBas, joursBas,
- *   doseFinale, dosages, demi
+ *   dose, duree: "court" | "moyen" | "long",
+ *   pasRapide, joursRapide, joursLent, delaiCortisol,
+ *   enfant, poids, taille, hcAdulteIndex
  * }
- * Retourne { paliers: [{ dose, jours }], erreurs: [] }
+ * Retour : {
+ *   court: bool, erreurs: [],
+ *   paliers: [{ dose, debut, jours }]   (debut = décalage en jours depuis J0)
+ *   arret: jour d'arrêt de la prednisone
+ *   hc: { debut, total, matin, midi } | null
+ *   cortisol: jour suggéré | null
+ * }
  */
-function genererSchema(params) {
+function calculerPlan(params, regles) {
   const erreurs = [];
-  const {
-    doseInitiale, joursInitiaux, mode, pasHaut, joursHaut,
-    seuil, pasBas, joursBas, doseFinale, dosages, demi
-  } = params;
-
-  const pas = granularite(dosages, demi);
-  if (!pas) erreurs.push("Aucun dosage disponible pour cette molécule.");
-  if (!(doseInitiale > 0)) erreurs.push("La dose initiale doit être supérieure à 0.");
-  if (!(joursInitiaux >= 1)) erreurs.push("La durée du premier palier doit être d'au moins 1 jour.");
-  if (!(pasHaut > 0)) erreurs.push("Le pas de décroissance au-dessus du seuil doit être supérieur à 0.");
-  if (mode === "pct" && pasHaut >= 100) erreurs.push("Le pourcentage doit être inférieur à 100.");
-  if (!(pasBas > 0)) erreurs.push("Le pas de décroissance sous le seuil doit être supérieur à 0.");
-  if (!(joursHaut >= 1) || !(joursBas >= 1)) erreurs.push("La durée des paliers doit être d'au moins 1 jour.");
-  if (!(doseFinale >= 0) || doseFinale >= doseInitiale) erreurs.push("La dose finale doit être comprise entre 0 et la dose initiale.");
-  if (erreurs.length) return { paliers: [], erreurs };
-
-  const paliers = [{ dose: doseInitiale, jours: joursInitiaux }];
-  let dose = doseInitiale;
-  let garde = 0;
-
-  while (dose > doseFinale && garde++ < 300) {
-    let suivante;
-    if (dose > seuil) {
-      suivante = mode === "pct" ? dose * (1 - pasHaut / 100) : dose - pasHaut;
-      // on ne descend pas sous le seuil d'un coup s'il est franchi
-      if (suivante < seuil) suivante = seuil;
-    } else {
-      suivante = dose - pasBas;
-    }
-    suivante = arrondir(suivante, pas);
-    if (suivante >= dose) suivante = arrondir(dose - pas, pas);
-    if (suivante < doseFinale) suivante = doseFinale;
-    if (suivante <= 0) {
-      dose = 0;
-      break;
-    }
-    paliers.push({ dose: suivante, jours: suivante > seuil ? joursHaut : joursBas });
-    dose = suivante;
+  const r = { court: false, erreurs, paliers: [], arret: 0, hc: null, cortisol: null };
+  if (params.duree === "court") {
+    r.court = true;
+    return r;
   }
-  if (garde >= 300) erreurs.push("Schéma trop long (plus de 300 paliers) : augmenter le pas de décroissance.");
-  return { paliers, erreurs };
+  if (!(params.dose > 0)) erreurs.push("Indiquer la dose actuelle.");
+  if (params.dose > 200) erreurs.push("Dose supérieure à 200 mg/j : vérifier la saisie.");
+  if (params.enfant && !(params.poids > 0 && params.taille > 0)) {
+    erreurs.push("Indiquer le poids et la taille de l'enfant.");
+  }
+  if (erreurs.length) return r;
+
+  let d = params.dose;
+  let t = 0;
+  const ajouter = (dose, jours) => {
+    r.paliers.push({ dose, debut: t, jours });
+    t += jours;
+  };
+
+  // Phase 1 : décroissance rapide jusqu'à 10 mg/j
+  while (d > regles.seuilRapide) {
+    ajouter(d, params.joursRapide);
+    d = Math.max(regles.seuilRapide, d - params.pasRapide);
+  }
+
+  // Phase 2 : paliers de 2,5 mg jusqu'à 5 mg/j (long) ou 2,5 mg/j (moyen)
+  const plancher = params.duree === "long" ? regles.seuilPhysiologique : regles.doseFinale;
+  while (d > plancher) {
+    ajouter(d, params.joursLent);
+    // multiple de 2,5 situé au moins 2,5 mg sous la dose actuelle
+    d = Math.floor((d - regles.pasLent) / regles.pasLent + 1e-9) * regles.pasLent;
+  }
+
+  if (params.duree === "moyen") {
+    // dernier palier (2,5 mg/j ou moins) puis arrêt
+    if (d > 0) ajouter(d, params.joursLent);
+    r.arret = t;
+    if (params.cortisol) r.cortisol = t - 1;
+  } else {
+    // relais hydrocortisone à la place de la dose physiologique
+    r.arret = t;
+    r.hc = { debut: t, ...doseHC(params, regles) };
+    if (params.cortisol) r.cortisol = t + params.delaiCortisol;
+  }
+  return r;
+}
+
+/* Nombre total de comprimés par dosage pour la pharmacie. */
+function totalComprimes(paliers, comprimes) {
+  const tot = new Map();
+  for (const p of paliers) {
+    const c = composer(p.dose, comprimes);
+    if (!c) return null;
+    for (const x of c) tot.set(x.dosage, (tot.get(x.dosage) || 0) + x.nombre * p.jours);
+  }
+  return [...tot.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([dosage, n]) => ({ dosage, nombre: Math.ceil(n) }));
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { convertir, equivPrednisone, granularite, composer, genererSchema, arrondir };
+  module.exports = { composer, surfaceCorporelle, doseHC, calculerPlan, totalComprimes };
 }

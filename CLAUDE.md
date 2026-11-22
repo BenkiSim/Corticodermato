@@ -1,6 +1,6 @@
 # Consignes pour Claude
 
-Projet : micro application statique (HTML, CSS, JavaScript sans dépendance) d'aide à la prescription des corticoïdes systémiques, déployée sur Vercel depuis la branche `main` et intégrée dans Notion par un bloc embed.
+Projet : micro application statique (HTML, CSS, JavaScript sans dépendance) d'aide à la prescription des corticoïdes systémiques, qui rédige des schémas de décroissance à copier dans une ordonnance. Déployée par GitHub Pages depuis la branche `main` (https://benkisim.github.io/Corticodermato/). Priorité absolue : simplicité, légèreté, ergonomie.
 
 ## Règles
 
@@ -9,10 +9,10 @@ Projet : micro application statique (HTML, CSS, JavaScript sans dépendance) d'a
 - Les données médicales vivent dans `data.js`. Toute donnée ajoutée ou modifiée (dose, équivalence, spécialité) doit être signalée à l'utilisateur pour vérification, avec la source si possible.
 - La logique de calcul va dans `logic.js` (exportable pour Node) et doit être couverte par `tests/test.js`.
 - Ne jamais stocker ni transmettre de données patient. `localStorage` est réservé aux préférences d'interface.
-- Ne pas ajouter d'en-tête `X-Frame-Options` ou de `frame-ancestors` restrictif : l'application doit rester intégrable dans Notion.
+- Ne pas ajouter d'en-tête `X-Frame-Options` ou de `frame-ancestors` restrictif : l'application doit rester intégrable dans un outil de notes (iframe).
 
 ## À chaque modification
 
 1. `node tests/test.js` doit passer.
 2. Incrémenter `APP_VERSION` (semver) et mettre `APP_DATE` à la date du jour dans `data.js`.
-3. Commit avec un message en français, puis push sur `main` (déploiement automatique Vercel).
+3. Commit avec un message en français, puis push sur `main` (publication automatique GitHub Pages).
