@@ -23,10 +23,11 @@
     </div>
 
     <div class="ligne" id="ligne-enfant" hidden>
-      <span class="etiquette">Mesures</span>
+      <span class="etiquette">Enfant</span>
       <div class="champs">
         <label class="champ"><input type="number" id="poids" min="1" step="any" inputmode="decimal" placeholder="Poids"><span>kg</span></label>
         <label class="champ"><input type="number" id="taille" min="30" step="any" inputmode="decimal" placeholder="Taille"><span>cm</span></label>
+        <label class="champ"><input type="number" id="age" min="0" step="any" inputmode="decimal" placeholder="Âge"><span>ans</span></label>
         <span class="info" id="sc"></span>
       </div>
     </div>
@@ -34,21 +35,33 @@
     <div class="ligne">
       <span class="etiquette">Molécule</span>
       <div class="segment">
-        <label><input type="radio" name="molecule" value="prednisone" checked><span>Prednisone</span></label>
-        <label><input type="radio" name="molecule" value="prednisolone"><span>Prednisolone</span></label>
+        <label><input type="radio" name="molecule" value="prednisone" checked><span>Prednisone <small>Cortancyl</small></span></label>
+        <label><input type="radio" name="molecule" value="prednisolone"><span>Prednisolone <small>Solupred</small></span></label>
       </div>
     </div>
 
     <div class="ligne">
-      <span class="etiquette">Dose actuelle</span>
+      <span class="etiquette">Dose</span>
       <div class="champs">
-        <label class="champ"><input type="number" id="dose" value="30" min="0" step="any" inputmode="decimal"><span>mg/j</span></label>
+        <label class="champ"><input type="number" id="dose" value="40" min="0" step="any" inputmode="decimal"><span>mg/j</span></label>
         <label class="champ"><span>à partir du</span><input type="date" id="debut"></label>
       </div>
     </div>
 
     <div class="ligne">
-      <span class="etiquette">Corticothérapie depuis</span>
+      <span class="etiquette">Pleine dose</span>
+      <div class="champs">
+        <label class="champ"><span>pendant</span><input type="number" id="pleine" value="0" min="0" step="1" inputmode="numeric"></label>
+        <select id="pleine-unite" aria-label="Unité de durée">
+          <option value="1">jours</option>
+          <option value="7" selected>semaines</option>
+        </select>
+        <span class="info">0 : décroissance immédiate</span>
+      </div>
+    </div>
+
+    <div class="ligne">
+      <span class="etiquette">Corticothérapie totale avant décroissance</span>
       <div class="segment">
         <label><input type="radio" name="duree" value="court"><span>&lt; 3 semaines</span></label>
         <label><input type="radio" name="duree" value="moyen" checked><span>3 sem. à 3 mois</span></label>
@@ -57,13 +70,16 @@
     </div>
 
     <p class="conduite" id="conduite"></p>
+    <div class="resume" id="resume"></div>
 
     <div class="ligne">
       <span class="etiquette">Ajouter</span>
       <div class="cases">
-        <label><input type="checkbox" id="opt-cortisol"> Cortisolémie 8 h</label>
-        <label><input type="checkbox" id="opt-consignes"> Consignes hydrocortisone</label>
-        <label><input type="checkbox" id="opt-secretariat" checked> Adresse secrétariat Timone</label>
+        <label><input type="checkbox" id="opt-consignes" checked> Consignes corticothérapie</label>
+        <label class="si-hc"><input type="checkbox" id="opt-consignes-hc"> Consignes hydrocortisone et stress</label>
+        <label class="si-hc"><input type="checkbox" id="opt-injectable"> Hydrocortisone injectable</label>
+        <label><input type="checkbox" id="opt-cortisol"> Bilan : cortisolémie 8 h</label>
+        <label><input type="checkbox" id="opt-secretariat" checked> Adresse secrétariat sur le bilan</label>
       </div>
     </div>
 
@@ -89,14 +105,7 @@
     </details>
   </form>
 
-  <section class="sortie">
-    <div class="sortie-tete">
-      <h2>Ordonnance</h2>
-      <button type="button" id="copier" class="principal">Copier</button>
-    </div>
-    <textarea id="texte" spellcheck="false" aria-label="Texte de l'ordonnance, modifiable avant copie"></textarea>
-    <div id="rappels"></div>
-  </section>
+  <div id="ordonnances"></div>
 
   <details class="fiche">
     <summary>Fiche réflexe</summary>

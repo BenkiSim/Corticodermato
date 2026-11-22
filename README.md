@@ -3,7 +3,7 @@
 Micro application web qui rédige des schémas de décroissance des corticoïdes systémiques, prêts à copier dans une ordonnance.
 
 1. Renseigner le patient (adulte ou enfant), la molécule, la dose actuelle et la durée de la corticothérapie.
-2. Le texte d'ordonnance se met à jour immédiatement : paliers datés, comprimés par jour, total pour la pharmacie, relais hydrocortisone, cortisolémie, consignes de sécurité et adresse du secrétariat.
+2. Les ordonnances se mettent à jour immédiatement, chacune avec son bouton « Copier » : traitement (pleine dose éventuelle, paliers datés, comprimés, quantité, relais hydrocortisone, consignes), hydrocortisone injectable d'urgence, bilan biologique avec adresse du secrétariat.
 3. Modifier le texte si besoin, puis « Copier ».
 
 Outil d'aide uniquement : il ne remplace pas le jugement clinique. Aucune donnée saisie n'est enregistrée ni transmise.

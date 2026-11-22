@@ -65,4 +65,36 @@ for (let dose = 1; dose <= 120; dose++) {
 // Total pour la pharmacie
 assert.deepStrictEqual(L.totalComprimes([{ dose: 7.5, jours: 14 }], pred), [{ dosage: 5, nombre: 21 }]);
 
+// Phase à pleine dose puis décroissance
+const att = L.calculerPlan({ ...base, dose: 40, pleineDose: 28, duree: "moyen" }, REGLES);
+assert.deepStrictEqual(att.paliers.map((p) => p.dose), [40, 35, 30, 25, 20, 15, 10, 7.5, 5, 2.5]);
+assert.strictEqual(att.paliers[0].jours, 28);
+assert.ok(att.paliers[0].pleine && !att.paliers[1].pleine);
+assert.strictEqual(att.joursPleine, 28);
+assert.strictEqual(att.joursDecroissance, 5 * 7 + 4 * 14);
+assert.strictEqual(att.arret, 28 + 5 * 7 + 4 * 14);
+
+// Pleine dose de moins de 3 semaines : arrêt direct
+const courte = L.calculerPlan({ ...base, dose: 40, pleineDose: 10, duree: "court" }, REGLES);
+assert.ok(!courte.court);
+assert.deepStrictEqual(courte.paliers.map((p) => [p.dose, p.jours]), [[40, 10]]);
+assert.strictEqual(courte.arret, 10);
+
+// Pleine dose basse puis relais hydrocortisone
+const attLong = L.calculerPlan({ ...base, dose: 5, pleineDose: 90, duree: "long" }, REGLES);
+assert.deepStrictEqual(attLong.paliers.map((p) => p.dose), [5]);
+assert.strictEqual(attLong.hc.debut, 90);
+
+// Pleine dose à 2,5 mg/j : pas de palier négatif
+const att25 = L.calculerPlan({ ...base, dose: 2.5, pleineDose: 30, duree: "moyen" }, REGLES);
+assert.deepStrictEqual(att25.paliers.map((p) => p.dose), [2.5]);
+
+// Hydrocortisone injectable d'urgence
+assert.strictEqual(L.doseHCUrgence(false, null, REGLES), 100);
+assert.strictEqual(L.doseHCUrgence(true, 1, REGLES), 25);
+assert.strictEqual(L.doseHCUrgence(true, 3, REGLES), 50);
+assert.strictEqual(L.doseHCUrgence(true, 12, REGLES), 50);
+assert.strictEqual(L.doseHCUrgence(true, 13, REGLES), 100);
+assert.strictEqual(L.doseHCUrgence(true, NaN, REGLES), null);
+
 console.log("Tous les tests passent.");

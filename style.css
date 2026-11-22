@@ -104,7 +104,7 @@ textarea {
   color: var(--texte); background: var(--fond);
   border: 1px solid var(--bord); border-radius: 8px; padding: 10px 12px;
 }
-#rappels p {
+.rappels p {
   margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; font-size: 0.88rem;
   background: var(--avert); border-left: 4px solid var(--avert-bord);
 }
@@ -116,3 +116,12 @@ textarea {
 
 footer { color: var(--doux); font-size: 0.8rem; }
 footer p { margin: 4px 0; }
+
+.segment small { font-size: 0.78rem; opacity: 0.8; margin-left: 3px; }
+.cases label[hidden] { display: none; }
+.resume { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin: 6px 0; }
+.resume div { background: var(--fond); border: 1px solid var(--bord); border-radius: 8px; padding: 6px 10px; display: flex; flex-direction: column; }
+.resume span { font-size: 0.78rem; color: var(--doux); }
+.resume p { grid-column: 1 / -1; margin: 0; font-size: 0.9rem; color: var(--doux); }
+.resume p.erreur { color: var(--texte); background: var(--avert); border-left: 4px solid var(--avert-bord); padding: 6px 10px; border-radius: 6px; }
+.rappels { margin-bottom: 14px; }

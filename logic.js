@@ -70,29 +70,43 @@ function doseHC(params, regles) {
   return regles.hcAdulteOptions[params.hcAdulteIndex || 0];
 }
 
+/* Dose du palier suivant (mg/j). */
+function doseSuivante(d, params, regles) {
+  if (d > regles.seuilRapide) return Math.max(regles.seuilRapide, d - params.pasRapide);
+  // multiple de 2,5 situé au moins 2,5 mg sous la dose actuelle
+  return Math.max(0, Math.floor((d - regles.pasLent) / regles.pasLent + 1e-9) * regles.pasLent);
+}
+
 /*
  * params : {
- *   dose, duree: "court" | "moyen" | "long",
+ *   dose, pleineDose (jours à pleine dose, 0 si décroissance immédiate),
+ *   duree: "court" | "moyen" | "long",
  *   pasRapide, joursRapide, joursLent, delaiCortisol,
- *   enfant, poids, taille, hcAdulteIndex
+ *   enfant, poids, taille, hcAdulteIndex, cortisol
  * }
  * Retour : {
- *   court: bool, erreurs: [],
- *   paliers: [{ dose, debut, jours }]   (debut = décalage en jours depuis J0)
- *   arret: jour d'arrêt de la prednisone
+ *   court: bool (aucun schéma à prescrire), erreurs: [],
+ *   paliers: [{ dose, debut, jours, pleine }]   (debut = décalage en jours depuis J0)
+ *   joursPleine, joursDecroissance,
+ *   arret: jour d'arrêt du corticoïde
  *   hc: { debut, total, matin, midi } | null
  *   cortisol: jour suggéré | null
  * }
  */
 function calculerPlan(params, regles) {
   const erreurs = [];
-  const r = { court: false, erreurs, paliers: [], arret: 0, hc: null, cortisol: null };
-  if (params.duree === "court") {
+  const pleine = Math.max(0, Math.round(params.pleineDose || 0));
+  const r = {
+    court: false, erreurs, paliers: [], joursPleine: pleine, joursDecroissance: 0,
+    arret: 0, hc: null, cortisol: null
+  };
+  if (params.duree === "court" && !pleine) {
     r.court = true;
     return r;
   }
-  if (!(params.dose > 0)) erreurs.push("Indiquer la dose actuelle.");
+  if (!(params.dose > 0)) erreurs.push("Indiquer la dose.");
   if (params.dose > 200) erreurs.push("Dose supérieure à 200 mg/j : vérifier la saisie.");
+  if (pleine > 730) erreurs.push("Durée à pleine dose supérieure à 2 ans : vérifier la saisie.");
   if (params.enfant && !(params.poids > 0 && params.taille > 0)) {
     erreurs.push("Indiquer le poids et la taille de l'enfant.");
   }
@@ -100,23 +114,26 @@ function calculerPlan(params, regles) {
 
   let d = params.dose;
   let t = 0;
-  const ajouter = (dose, jours) => {
-    r.paliers.push({ dose, debut: t, jours });
+  const ajouter = (dose, jours, estPleine) => {
+    r.paliers.push({ dose, debut: t, jours, pleine: !!estPleine });
     t += jours;
   };
 
-  // Phase 1 : décroissance rapide jusqu'à 10 mg/j
-  while (d > regles.seuilRapide) {
-    ajouter(d, params.joursRapide);
-    d = Math.max(regles.seuilRapide, d - params.pasRapide);
+  // Phase d'attaque à pleine dose
+  if (pleine) {
+    ajouter(d, pleine, true);
+    if (params.duree === "court") {
+      r.arret = t;
+      return r;
+    }
+    d = doseSuivante(d, params, regles);
   }
 
-  // Phase 2 : paliers de 2,5 mg jusqu'à 5 mg/j (long) ou 2,5 mg/j (moyen)
+  // Décroissance : paliers rapides au-dessus de 10 mg/j, puis paliers de 2,5 mg
   const plancher = params.duree === "long" ? regles.seuilPhysiologique : regles.doseFinale;
   while (d > plancher) {
-    ajouter(d, params.joursLent);
-    // multiple de 2,5 situé au moins 2,5 mg sous la dose actuelle
-    d = Math.floor((d - regles.pasLent) / regles.pasLent + 1e-9) * regles.pasLent;
+    ajouter(d, d > regles.seuilRapide ? params.joursRapide : params.joursLent);
+    d = doseSuivante(d, params, regles);
   }
 
   if (params.duree === "moyen") {
@@ -130,7 +147,15 @@ function calculerPlan(params, regles) {
     r.hc = { debut: t, ...doseHC(params, regles) };
     if (params.cortisol) r.cortisol = t + params.delaiCortisol;
   }
+  r.joursDecroissance = t - pleine;
   return r;
+}
+
+/* Dose d'hydrocortisone injectable d'urgence selon l'âge (mg). */
+function doseHCUrgence(enfant, age, regles) {
+  if (!enfant) return regles.hcUrgenceAdulte;
+  if (!(age >= 0)) return null;
+  return regles.hcUrgenceEnfant.find((x) => age < x.ageMax).dose;
 }
 
 /* Nombre total de comprimés par dosage pour la pharmacie. */
@@ -147,5 +172,5 @@ function totalComprimes(paliers, comprimes) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { composer, surfaceCorporelle, doseHC, calculerPlan, totalComprimes };
+  module.exports = { composer, surfaceCorporelle, doseHC, calculerPlan, totalComprimes, doseHCUrgence };
 }
